@@ -1,0 +1,74 @@
+# Local development services. Run Django on the host (venv) against these,
+# or start the full stack with: docker compose --profile app up
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_DB: afrimapesa
+      POSTGRES_USER: afrimapesa
+      POSTGRES_PASSWORD: afrimapesa
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U afrimapesa -d afrimapesa"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    profiles: ["app"]
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://afrimapesa:afrimapesa@db:5432/afrimapesa
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker:
+    profiles: ["app"]
+    build: .
+    command: celery -A config worker -l info
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://afrimapesa:afrimapesa@db:5432/afrimapesa
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - .:/app
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  beat:
+    profiles: ["app"]
+    build: .
+    command: celery -A config beat -l info
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://afrimapesa:afrimapesa@db:5432/afrimapesa
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - .:/app
+    depends_on:
+      redis: { condition: service_healthy }
+
+volumes:
+  pgdata:
