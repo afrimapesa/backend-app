@@ -27,6 +27,8 @@ INSTALLED_APPS = [
     # Local
     "apps.core",
     "apps.reference",
+    "apps.ingestion",
+    "apps.fx",
     "apps.remittance",
 ]
 
