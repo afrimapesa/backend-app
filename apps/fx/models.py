@@ -16,6 +16,7 @@ class FxMidRate(models.Model):
         CURRENCY_FREAKS = "currencyfreaks", "CurrencyFreaks"
         DERIVED = "derived", "Derived cross rate"
         MANUAL = "manual", "Manual entry"
+        IMPORT = "import", "Historical import"
 
     pk = models.CompositePrimaryKey("base", "quote", "observed_at")
     base = models.ForeignKey("reference.Currency", on_delete=models.PROTECT, related_name="+")

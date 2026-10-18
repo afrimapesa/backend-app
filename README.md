@@ -37,6 +37,20 @@ celery -A config beat -l info
 
 Or run the whole stack in containers: `docker compose --profile app up --build`.
 
+## Historical FX rates
+
+Load past mid-market rates (for the trend chart) from a CSV or Excel file:
+
+```bash
+python manage.py import_fx_history rates.xlsx --dry-run   # check what will be read
+python manage.py import_fx_history rates.xlsx
+```
+
+Accepted layouts: long (`date, base, quote, rate`, or `date, pair, rate` with pairs like
+`USD/NGN`) or wide (a `date` column plus one column per pair, headed `USD/NGN`). Dates
+like `2026-10-01` or `01/10/2026`. Re-importing is safe; existing days are kept.
+The data is served at `GET /v1/fx/history/?base=GBP&quote=NGN&days=90`.
+
 ## Quality checks
 
 ```bash
@@ -53,5 +67,6 @@ CI runs the same checks on every push and pull request (`.github/workflows/ci.ym
 config/            settings (base/dev/test/prod), urls, celery
 apps/core/         shared utilities, health endpoint
 apps/reference/    currencies, countries, 18 corridors, 15 providers (seeded) — /v1/reference/
+apps/fx/           mid-market rates, history endpoint, import_fx_history command
 apps/remittance/   calculation engine (engine.py): fees, A_net, effective rate, top-5 ranking
 ```
