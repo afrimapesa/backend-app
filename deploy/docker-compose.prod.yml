@@ -1,0 +1,88 @@
+# Production / preview stack on a single server.
+#
+#   cd deploy && docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#
+# Expects the frontend repo checked out next to this one (FRONTEND_DIR, default
+# ../../frontend-app). Only Caddy is reachable from outside (ports 80/443).
+name: afrimapesa
+
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: afrimapesa
+      POSTGRES_USER: afrimapesa
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U afrimapesa -d afrimapesa"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: ..
+    restart: unless-stopped
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY in .env.prod}
+      # "api" lets the frontend container call Django over the internal network.
+      DJANGO_ALLOWED_HOSTS: ${DOMAIN},api,localhost
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://${DOMAIN}
+      DATABASE_URL: postgres://afrimapesa:${POSTGRES_PASSWORD}@db:5432/afrimapesa
+      REDIS_URL: redis://redis:6379/0
+      LOG_LEVEL: INFO
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  web:
+    build:
+      context: ${FRONTEND_DIR:-../../frontend-app}
+      args:
+        # Same origin as the site: Caddy routes /v1/* to Django, so no CORS is needed.
+        NEXT_PUBLIC_API_URL: https://${DOMAIN}
+        NEXT_PUBLIC_TIKTOK_URL: ${NEXT_PUBLIC_TIKTOK_URL:-}
+        NEXT_PUBLIC_INSTAGRAM_URL: ${NEXT_PUBLIC_INSTAGRAM_URL:-}
+        NEXT_PUBLIC_FACEBOOK_URL: ${NEXT_PUBLIC_FACEBOOK_URL:-}
+    restart: unless-stopped
+    environment:
+      # Server-side rendering talks to Django directly inside the Docker network.
+      API_URL: http://api:8000
+    depends_on:
+      - api
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env.prod}
+      PREVIEW_USER: ${PREVIEW_USER:?set PREVIEW_USER in .env.prod}
+      PREVIEW_PASSWORD_HASH: ${PREVIEW_PASSWORD_HASH:?set PREVIEW_PASSWORD_HASH in .env.prod}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

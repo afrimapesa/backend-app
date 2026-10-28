@@ -1,0 +1,27 @@
+{
+	email {$ACME_EMAIL}
+}
+
+# One domain for everything: Django under /v1, /admin, /static, /health; Next.js for the rest.
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Private preview: password on the whole site, and keep it out of search engines.
+	basic_auth {
+		{$PREVIEW_USER} {$PREVIEW_PASSWORD_HASH}
+	}
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		Strict-Transport-Security "max-age=31536000"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	@django path /v1/* /admin /admin/* /static/* /health/
+	handle @django {
+		reverse_proxy api:8000
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}
