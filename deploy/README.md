@@ -74,7 +74,7 @@ docker run --rm caddy:2-alpine caddy hash-password --plaintext 'choose-a-passwor
 # secrets for DJANGO_SECRET_KEY and POSTGRES_PASSWORD
 openssl rand -base64 48 | tr -d '\n/+='; echo
 
-nano .env.prod   # set DOMAIN=preview.afrimapesa.com, ACME_EMAIL, the hash and secrets
+nano .env.prod   # set DOMAIN=preview.afrimapesa.com, the hash and secrets
 chmod 600 .env.prod
 ```
 

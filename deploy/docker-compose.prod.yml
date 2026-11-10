@@ -88,7 +88,6 @@ services:
       DOMAIN: ${DOMAIN:?set DOMAIN in .env.prod}
       PREVIEW_USER: ${PREVIEW_USER:?set PREVIEW_USER in .env.prod}
       PREVIEW_PASSWORD_HASH: ${PREVIEW_PASSWORD_HASH:?set PREVIEW_PASSWORD_HASH in .env.prod}
-      ACME_EMAIL: ${ACME_EMAIL:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

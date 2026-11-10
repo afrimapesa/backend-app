@@ -1,6 +1,4 @@
-{
-	email {$ACME_EMAIL}
-}
+# Certificates come from Let's Encrypt automatically; no contact email is required.
 
 # One domain for everything: Django under /v1, /admin, /static, /health; Next.js for the rest.
 {$DOMAIN} {
