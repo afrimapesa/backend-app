@@ -53,7 +53,12 @@ services:
   sampler:
     build: ..
     restart: unless-stopped
-    command: ["python", "manage.py", "seed_sample_quotes", "--loop", "300"]
+    # Wait until the api container has applied migrations, then refresh every 5 minutes.
+    command:
+      - sh
+      - -c
+      - until python manage.py migrate --check >/dev/null 2>&1; do sleep 5; done;
+        exec python manage.py seed_sample_quotes --loop 300
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.prod
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}

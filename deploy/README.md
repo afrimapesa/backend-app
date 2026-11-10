@@ -92,6 +92,24 @@ The first build takes several minutes. Open `https://preview.afrimapesa.com`, lo
 docker compose -f docker-compose.prod.yml --env-file .env.prod exec api python manage.py createsuperuser
 ```
 
+## Backups
+
+`/usr/local/bin/afrimapesa-backup` runs nightly at 02:15 (`/etc/cron.d/afrimapesa-backup`) and
+keeps 14 days of compressed dumps in `/opt/afrimapesa/backups/` (root only). DigitalOcean's
+weekly droplet backups are the second layer.
+
+Restoring a TimescaleDB dump needs Timescale's pre/post restore calls:
+
+```bash
+C="docker compose -f docker-compose.prod.yml --env-file .env.prod"
+$C stop api sampler
+$C exec -T db psql -U afrimapesa -d postgres -c "DROP DATABASE afrimapesa;" -c "CREATE DATABASE afrimapesa;"
+$C exec -T db psql -U afrimapesa -d afrimapesa -c "CREATE EXTENSION timescaledb; SELECT timescaledb_pre_restore();"
+zcat /opt/afrimapesa/backups/afrimapesa-YYYY-MM-DD.sql.gz | $C exec -T db psql -U afrimapesa -d afrimapesa
+$C exec -T db psql -U afrimapesa -d afrimapesa -c "SELECT timescaledb_post_restore();"
+$C start api sampler
+```
+
 ## Updating after new commits
 
 ```bash

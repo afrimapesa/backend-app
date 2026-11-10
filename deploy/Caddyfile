@@ -15,11 +15,17 @@
 		-Server
 	}
 
+	# The preview login is only a gate: don't forward it, or Django REST Framework would try to
+	# use it as a Django account login and reject every API call.
 	@django path /v1/* /admin /admin/* /static/* /health/
 	handle @django {
-		reverse_proxy api:8000
+		reverse_proxy api:8000 {
+			header_up -Authorization
+		}
 	}
 	handle {
-		reverse_proxy web:3000
+		reverse_proxy web:3000 {
+			header_up -Authorization
+		}
 	}
 }
