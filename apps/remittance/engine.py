@@ -163,9 +163,10 @@ def calculate(
 
 
 def _sort_key(result: QuoteResult) -> tuple:
-    # Best payout first; ties go to lower fee, then faster delivery, then name (deterministic).
+    # Fresh quotes before stale ones (an old cheap rate must not push out a live one); then
+    # best payout first; ties go to lower fee, faster delivery, then name (deterministic).
     speed = result.transfer_time if result.transfer_time is not None else timedelta.max
-    return (-result.net_payout, result.transfer_fee, speed, result.provider)
+    return (result.is_stale, -result.net_payout, result.transfer_fee, speed, result.provider)
 
 
 def rank_quotes(

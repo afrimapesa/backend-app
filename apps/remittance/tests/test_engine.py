@@ -245,3 +245,10 @@ class TestRanking:
 
     def test_empty(self):
         assert rank_quotes([], D("100"), D("2000"), NOW) == []
+
+
+def test_stale_quotes_rank_after_fresh_ones():
+    stale_but_cheap = make_quote("stale", fx_rate="1999", observed_at=NOW - 3 * HOUR)
+    fresh = make_quote("fresh", fx_rate="1900")
+    ranked = rank_quotes([stale_but_cheap, fresh], D("100"), D("2000"), NOW)
+    assert [(r.provider, r.is_stale) for r in ranked] == [("fresh", False), ("stale", True)]

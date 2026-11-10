@@ -16,6 +16,7 @@ class ProviderQuote(models.Model):
     class Source(models.TextChoices):
         ADAPTER = "adapter", "Automated adapter"
         MANUAL = "manual", "Manual override"
+        SAMPLE = "sample", "Sample data (preview only)"
 
     pk = models.CompositePrimaryKey("provider", "corridor", "observed_at")
     provider = models.ForeignKey(

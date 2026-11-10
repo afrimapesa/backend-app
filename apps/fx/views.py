@@ -40,6 +40,7 @@ class HistoryResponseSerializer(serializers.Serializer):
     quote = serializers.CharField()
     days = serializers.IntegerField()
     derived = serializers.BooleanField(help_text="True when computed as a cross rate via USD.")
+    sample = serializers.BooleanField(help_text="True when any point is preview sample data.")
     points = HistoryPointSerializer(many=True)
 
 
@@ -66,6 +67,7 @@ class FxHistoryView(APIView):
                 "quote": quote,
                 "days": days,
                 "derived": series.derived,
+                "sample": series.sample,
                 "points": [{"date": d, "rate": r} for d, r in series.points],
             }
         )

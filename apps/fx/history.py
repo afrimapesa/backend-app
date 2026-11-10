@@ -17,7 +17,9 @@ from .services import PIVOT
 # --- reading history -------------------------------------------------------------------
 
 _DAILY_SQL = """
-    SELECT time_bucket('1 day', observed_at) AS day, last(rate, observed_at) AS rate
+    SELECT time_bucket('1 day', observed_at) AS day,
+           last(rate, observed_at) AS rate,
+           bool_or(source = 'sample') AS sample
     FROM fx_mid_rates
     WHERE base_id = %s AND quote_id = %s AND observed_at >= %s AND observed_at < %s
     GROUP BY day
@@ -29,6 +31,7 @@ _DAILY_SQL = """
 class DailySeries:
     points: list[tuple[date, Decimal]]
     derived: bool  # True when computed as a cross rate through USD
+    sample: bool = False  # any day includes preview sample data
 
 
 def daily_history(base: str, quote: str, *, days: int, today: date) -> DailySeries:
@@ -41,18 +44,28 @@ def daily_history(base: str, quote: str, *, days: int, today: date) -> DailySeri
 
     direct = _daily(base, quote, start, end)
     if direct or PIVOT in (base, quote):
-        return DailySeries(points=sorted(direct.items()), derived=False)
+        return DailySeries(
+            points=sorted((d, r) for d, (r, _) in direct.items()),
+            derived=False,
+            sample=any(s for _, s in direct.values()),
+        )
 
     usd_base = _daily(PIVOT, base, start, end)
     usd_quote = _daily(PIVOT, quote, start, end)
-    crossed = {day: usd_quote[day] / usd_base[day] for day in usd_base.keys() & usd_quote.keys()}
-    return DailySeries(points=sorted(crossed.items()), derived=bool(crossed))
+    shared = usd_base.keys() & usd_quote.keys()
+    return DailySeries(
+        points=sorted((d, usd_quote[d][0] / usd_base[d][0]) for d in shared),
+        derived=bool(shared),
+        sample=any(usd_base[d][1] or usd_quote[d][1] for d in shared),
+    )
 
 
-def _daily(base: str, quote: str, start: datetime, end: datetime) -> dict[date, Decimal]:
+def _daily(
+    base: str, quote: str, start: datetime, end: datetime
+) -> dict[date, tuple[Decimal, bool]]:
     with connection.cursor() as cursor:
         cursor.execute(_DAILY_SQL, [base, quote, start, end])
-        return {day.date(): rate for day, rate in cursor.fetchall()}
+        return {day.date(): (rate, sample) for day, rate, sample in cursor.fetchall()}
 
 
 # --- importing history -----------------------------------------------------------------

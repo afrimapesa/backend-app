@@ -37,6 +37,22 @@ celery -A config beat -l info
 
 Or run the whole stack in containers: `docker compose --profile app up --build`.
 
+## Comparison API and sample data
+
+`GET /v1/remittance/compare/?send=GB&receive=NG&amount=200` returns the top 5 providers for a
+corridor, ranked by what the recipient receives (fresh quotes before stale ones; every quote
+carries `is_stale`). The latest quotes and mid-market rate per corridor are cached in Redis
+for 60 s and dropped whenever an adapter stores new quotes.
+
+Until live feeds run, fill the database with **labelled sample data** (responses then carry
+`"sample": true` and the site says so):
+
+```bash
+python manage.py seed_sample_quotes              # one fresh set (+90 days of rate history)
+python manage.py seed_sample_quotes --loop 300   # keep it fresh; mid rates expire after 30 min
+python manage.py seed_sample_quotes --clear      # remove all sample data
+```
+
 ## Historical FX rates
 
 Load past mid-market rates (for the trend chart) from a CSV or Excel file:

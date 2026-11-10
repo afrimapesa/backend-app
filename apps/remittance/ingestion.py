@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
+from django.db import transaction
 from django.utils import timezone
 
 from apps.fx.services import latest_mid_rate
@@ -20,6 +21,7 @@ from apps.ingestion.models import IngestionRun
 from apps.ingestion.validators import check_against_mid
 from apps.reference.models import Corridor
 
+from . import compare
 from .models import ProviderQuote
 
 CLOCK_SKEW = timedelta(minutes=5)
@@ -88,6 +90,9 @@ class ProviderQuoteAdapter[RawT](Adapter[RawT, QuoteRecord]):
         ]
         # A re-delivered observation (same provider, corridor, timestamp) is a no-op.
         ProviderQuote.objects.bulk_create(rows, ignore_conflicts=True)
+        # Drop cached compare snapshots once the new quotes are committed.
+        corridor_ids = {row.corridor_id for row in rows}
+        transaction.on_commit(lambda: compare.invalidate(corridor_ids))
         return len(rows)
 
     def corridor_for(self, record: QuoteRecord) -> Corridor:

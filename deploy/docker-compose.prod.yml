@@ -47,6 +47,21 @@ services:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
 
+  # PREVIEW ONLY: keeps labelled sample rates and quotes fresh (every 5 min) until the live
+  # FX feed and provider adapters run. Remove this service and run
+  # `manage.py seed_sample_quotes --clear` when they do.
+  sampler:
+    build: ..
+    restart: unless-stopped
+    command: ["python", "manage.py", "seed_sample_quotes", "--loop", "300"]
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DATABASE_URL: postgres://afrimapesa:${POSTGRES_PASSWORD}@db:5432/afrimapesa
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      api: { condition: service_started }
+
   web:
     build:
       context: ${FRONTEND_DIR:-../../frontend-app}

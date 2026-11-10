@@ -17,6 +17,7 @@ class FxMidRate(models.Model):
         DERIVED = "derived", "Derived cross rate"
         MANUAL = "manual", "Manual entry"
         IMPORT = "import", "Historical import"
+        SAMPLE = "sample", "Sample data (preview only)"
 
     pk = models.CompositePrimaryKey("base", "quote", "observed_at")
     base = models.ForeignKey("reference.Currency", on_delete=models.PROTECT, related_name="+")

@@ -99,3 +99,17 @@ def test_fx_adapter_redelivery_is_idempotent():
 
     assert run.status == IngestionRun.Status.SUCCESS
     assert FxMidRate.objects.filter(base="USD", quote="NGN").count() == 1
+
+
+def test_latest_mid_reports_sample_and_cross_timestamp():
+    from apps.fx.services import latest_mid
+
+    now = timezone.now()
+    add_rate("USD", "NGN", "1530", now - timedelta(minutes=10))
+    FxMidRate.objects.create(
+        base_id="USD", quote_id="GBP", rate=D("0.75"), observed_at=now, source="sample"
+    )
+    mid = latest_mid("GBP", "NGN", at=now)
+    assert mid.rate == D("1530") / D("0.75")
+    assert mid.sample is True
+    assert mid.observed_at == now - timedelta(minutes=10)  # the older leg
