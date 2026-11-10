@@ -1,4 +1,4 @@
-# Deploying the AFRIMAPESA preview (DigitalOcean + GoDaddy)
+# Deploying the AFRIMAPESA preview (DigitalOcean + Namecheap)
 
 One server runs everything with Docker Compose. Caddy terminates HTTPS (free Let's Encrypt
 certificates), puts a password on the whole site, and routes `/v1`, `/admin`, `/static`,
@@ -19,21 +19,26 @@ Internet ──443──> Caddy ──> web (Next.js :3000)
 - Enable **weekly backups**.
 - Note the droplet's **public IPv4** address.
 
-## 2. Point the domain at it (GoDaddy)
+## 2. Point the domain at it (Namecheap)
 
-GoDaddy → **My Products → your domain → DNS → Add new record**:
+Droplet: **138.68.157.253**. `afrimapesa.com` uses Namecheap **hosting** nameservers
+(`dns1/dns2.namecheaphosting.com`), so its DNS records live in the hosting account's
+**cPanel → Zone Editor** (not the domain's "Advanced DNS" tab, which only applies with
+Namecheap BasicDNS). Add:
 
 | Type | Name | Value | TTL |
 |---|---|---|---|
-| A | `preview` | the droplet IPv4 | 600 seconds |
+| A | `preview` | `138.68.157.253` | 300 |
 
-This serves the preview at `preview.<your-domain>` and leaves the root domain free for
-launch. Check it has propagated (can take a few minutes): `nslookup preview.<your-domain>`.
+Leave the existing `afrimapesa.com` / `www` records alone: they point at the current
+Namecheap hosting. Check it has propagated (a few minutes to an hour):
+`nslookup preview.afrimapesa.com 1.1.1.1` must return `138.68.157.253` before step 6,
+or Caddy cannot get the HTTPS certificate.
 
 ## 3. Prepare the server (once)
 
 ```bash
-ssh root@<droplet-ip>
+ssh root@138.68.157.253
 
 # Firewall: SSH + web only
 ufw allow OpenSSH && ufw allow 80 && ufw allow 443 && ufw --force enable
@@ -69,7 +74,7 @@ docker run --rm caddy:2-alpine caddy hash-password --plaintext 'choose-a-passwor
 # secrets for DJANGO_SECRET_KEY and POSTGRES_PASSWORD
 openssl rand -base64 48 | tr -d '\n/+='; echo
 
-nano .env.prod   # set DOMAIN=preview.<your-domain>, ACME_EMAIL, the hash and secrets
+nano .env.prod   # set DOMAIN=preview.afrimapesa.com, ACME_EMAIL, the hash and secrets
 chmod 600 .env.prod
 ```
 
@@ -80,7 +85,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 docker compose -f docker-compose.prod.yml --env-file .env.prod ps
 ```
 
-The first build takes several minutes. Open `https://preview.<your-domain>`, log in with
+The first build takes several minutes. Open `https://preview.afrimapesa.com`, log in with
 `PREVIEW_USER` and the password. Django admin: create a login with
 
 ```bash
