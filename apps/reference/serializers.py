@@ -19,6 +19,7 @@ class CountrySerializer(serializers.ModelSerializer):
             "currency",
             "is_sending",
             "is_receiving",
+            "pricing_market",
             "central_bank",
             "central_bank_code",
         ]

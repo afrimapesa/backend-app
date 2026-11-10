@@ -213,3 +213,20 @@ class TestSeedSampleQuotes:
         assert ProviderQuote.objects.filter(source="sample").count() == 0
         assert FxMidRate.objects.filter(source="sample").count() == 0
         assert FxMidRate.objects.filter(source="manual").count() == 2  # gb_ng fixture rows
+
+
+def test_endpoint_prices_euro_countries_with_eu_corridor(client, now):
+    for code, rate in [("EUR", "0.9"), ("NGN", "1530")]:
+        FxMidRate.objects.create(
+            base_id="USD", quote_id=code, rate=D(rate), observed_at=now, source="manual"
+        )
+    eu_ng = Corridor.objects.get(send_country="EU", receive_country="NG")
+    add_quote(eu_ng, "wise", "1690", now - timedelta(minutes=5))
+    url = reverse("remittance-compare")
+
+    body = client.get(url, {"send": "DE", "receive": "NG", "amount": "100"}).json()
+    assert body["corridor"] == "EU-EUR-NG-NGN" and body["send_currency"] == "EUR"
+    assert [r["provider"]["slug"] for r in body["results"]] == ["wise"]
+    # "EU" itself is no longer a sender; unknown senders are 404 too.
+    assert client.get(url, {"send": "EU", "receive": "NG", "amount": "100"}).status_code == 404
+    assert client.get(url, {"send": "XX", "receive": "NG", "amount": "100"}).status_code == 404

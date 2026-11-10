@@ -11,7 +11,16 @@ class CurrencyAdmin(admin.ModelAdmin):
 
 @admin.register(Country)
 class CountryAdmin(admin.ModelAdmin):
-    list_display = ["code", "name", "kind", "currency", "is_sending", "is_receiving", "is_active"]
+    list_display = [
+        "code",
+        "name",
+        "kind",
+        "currency",
+        "is_sending",
+        "pricing_market",
+        "is_receiving",
+        "is_active",
+    ]
     list_filter = ["is_sending", "is_receiving", "is_active"]
     search_fields = ["code", "name"]
 

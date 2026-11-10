@@ -42,6 +42,17 @@ class Country(models.Model):
     currency = models.ForeignKey(Currency, on_delete=models.PROTECT, related_name="countries")
     is_sending = models.BooleanField(default=False)
     is_receiving = models.BooleanField(default=False)
+    pricing_market = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="member_countries",
+        help_text=(
+            "Compare using this market's corridors instead of the country's own. Euro-area "
+            "countries use EU: providers price euro transfers the same across the euro area."
+        ),
+    )
     central_bank = models.CharField(max_length=128, blank=True)
     central_bank_code = models.CharField(max_length=16, blank=True)
     is_active = models.BooleanField(default=True)
@@ -52,6 +63,11 @@ class Country(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def corridor_country_id(self) -> str:
+        """The country whose corridors price transfers sent from here."""
+        return self.pricing_market_id or self.code
 
 
 class Corridor(models.Model):

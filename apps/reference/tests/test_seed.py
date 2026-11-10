@@ -10,11 +10,22 @@ pytestmark = pytest.mark.django_db
 def test_seeds_eighteen_corridors():
     assert Corridor.objects.count() == 18
     assert set(Country.objects.filter(is_sending=True).values_list("code", flat=True)) == {
-        "US",
-        "GB",
-        "EU",
-    }
+        "US", "GB", *EURO_SENDERS,
+    }  # fmt: skip
     assert Country.objects.filter(is_receiving=True).count() == 6
+
+
+EURO_SENDERS = {"AT", "BE", "FI", "FR", "DE", "IE", "IT", "NL", "PT", "ES"}
+
+
+def test_euro_area_senders_are_priced_with_eu_corridors():
+    euro = Country.objects.filter(code__in=EURO_SENDERS)
+    assert euro.count() == 10
+    assert {(c.currency_id, c.corridor_country_id) for c in euro} == {("EUR", "EU")}
+    # The EU market keeps its corridors but is no longer offered as a sender itself.
+    eu = Country.objects.get(code="EU")
+    assert not eu.is_sending and eu.outbound_corridors.count() == 6
+    assert Country.objects.get(code="GB").corridor_country_id == "GB"
 
 
 def test_corridor_currencies_match_country_currencies():
@@ -72,7 +83,7 @@ def test_currency_list_endpoint(client):
     assert len(response.json()) == Currency.objects.count() == 9
 
 
-@pytest.mark.parametrize(("role", "expected"), [("sending", 3), ("receiving", 6), (None, 9)])
+@pytest.mark.parametrize(("role", "expected"), [("sending", 12), ("receiving", 6), (None, 19)])
 def test_country_list_role_filter(client, role, expected):
     params = {"role": role} if role else {}
     response = client.get(reverse("country-list"), params)

@@ -8,7 +8,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.reference.models import Corridor
+from apps.reference.models import Corridor, Country
 
 from .compare import compare
 
@@ -78,9 +78,13 @@ class CompareView(APIView):
     def get(self, request: Request) -> Response:
         query = CompareQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
+        # Euro-area countries are priced with the EU corridors (Country.pricing_market).
+        sender = get_object_or_404(
+            Country, code=query.validated_data["send"].upper(), is_sending=True, is_active=True
+        )
         corridor = get_object_or_404(
             Corridor.objects.select_related("send_currency", "receive_currency"),
-            send_country=query.validated_data["send"].upper(),
+            send_country=sender.corridor_country_id,
             receive_country=query.validated_data["receive"].upper(),
             is_active=True,
         )
