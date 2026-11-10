@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     "apps.ingestion",
     "apps.fx",
     "apps.remittance",
+    "apps.insights",
 ]
 
 MIDDLEWARE = [

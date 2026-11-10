@@ -120,6 +120,12 @@ cd deploy && docker compose -f docker-compose.prod.yml --env-file .env.prod up -
 
 Migrations run automatically when the `api` container starts.
 
+Sample articles for the news pages (once, or again to re-date them; removed with `--clear`):
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec api python manage.py seed_sample_articles
+```
+
 ## Useful commands
 
 ```bash

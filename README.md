@@ -67,6 +67,27 @@ Accepted layouts: long (`date, base, quote, rate`, or `date, pair, rate` with pa
 like `2026-10-01` or `01/10/2026`. Re-importing is safe; existing days are kept.
 The data is served at `GET /v1/fx/history/?base=GBP&quote=NGN&days=90`.
 
+## News & insights
+
+Articles, bylines and advertisements are managed in the Django admin (**News & insights**).
+Nothing is syndicated: wire stories would need a Reuters/Bloomberg licence (plan D05).
+Article bodies are plain text: paragraphs separated by a blank line, `## ` for subheadings.
+
+- `GET /v1/insights/front/`: the whole front page (lead, top stories, latest, sections,
+  opinion & analysis, explainers, booked ads per slot), cached 60 s and dropped on any edit.
+- `GET /v1/insights/articles/?section=currencies&kind=analysis&country=NG&page=2`
+- `GET /v1/insights/articles/<slug>/`: body plus related stories.
+- `GET /v1/fx/movers/?base=USD&days=30`: each receiving currency's latest rate, 1-day and
+  period change, and daily points (for the markets band).
+
+Ad slots: `leaderboard` (970×90), `rail` (300×250), `inline` (728×90, inside articles). Ads
+are always labelled and never appear inside comparison results.
+
+```bash
+python manage.py seed_sample_articles          # labelled sample articles for the preview
+python manage.py seed_sample_articles --clear  # remove them
+```
+
 ## Quality checks
 
 ```bash
@@ -85,4 +106,5 @@ apps/core/         shared utilities, health endpoint
 apps/reference/    currencies, countries, 18 corridors, 15 providers (seeded) â€” /v1/reference/
 apps/fx/           mid-market rates, history endpoint, import_fx_history command
 apps/remittance/   calculation engine (engine.py): fees, A_net, effective rate, top-5 ranking
+apps/insights/     news & insights: articles, authors, ad slots, cached front page
 ```
