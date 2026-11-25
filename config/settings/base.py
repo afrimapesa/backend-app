@@ -1,5 +1,6 @@
 """Settings shared by every environment. Values come from the environment / .env file."""
 
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -115,7 +116,34 @@ CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=REDIS_URL)
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
-CELERY_BEAT_SCHEDULE: dict = {}
+
+# --- Mid-market FX feeds (strategy doc §3.1; plan T07) ------------------------------------
+# Each feed runs only when its key is set. Free plans allow roughly 1,000-1,500 calls a
+# month, so the default refresh is hourly; set FX_REFRESH_MINUTES=5 on a paid plan.
+OPEN_EXCHANGE_RATES_APP_ID = env("OPEN_EXCHANGE_RATES_APP_ID", default="")
+EXCHANGE_RATE_API_KEY = env("EXCHANGE_RATE_API_KEY", default="")
+EXCHANGE_RATE_API_BASE = env("EXCHANGE_RATE_API_BASE", default="EUR")
+CURRENCY_FREAKS_API_KEY = env("CURRENCY_FREAKS_API_KEY", default="")
+CURRENCY_FREAKS_BASE = env("CURRENCY_FREAKS_BASE", default="GBP")
+FX_REFRESH_MINUTES = env.int("FX_REFRESH_MINUTES", default=60)
+# Older mid rates are not used for comparisons. Keep it above the refresh interval plus
+# the feed's own update lag (hourly free plans: 150).
+FX_MID_MAX_AGE = timedelta(minutes=env.int("FX_MID_MAX_AGE_MINUTES", default=30))
+
+_FX_FEEDS = {
+    "openexchangerates": OPEN_EXCHANGE_RATES_APP_ID,
+    "exchangerate_api": EXCHANGE_RATE_API_KEY,
+    "currencyfreaks": CURRENCY_FREAKS_API_KEY,
+}
+CELERY_BEAT_SCHEDULE: dict = {
+    f"fx-{source}": {
+        "task": "ingestion.run_adapter",
+        "schedule": timedelta(minutes=FX_REFRESH_MINUTES),
+        "args": (source,),
+    }
+    for source, key in _FX_FEEDS.items()
+    if key
+}
 
 LOGGING = {
     "version": 1,

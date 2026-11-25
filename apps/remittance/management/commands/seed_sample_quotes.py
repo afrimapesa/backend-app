@@ -4,6 +4,9 @@
     python manage.py seed_sample_quotes --loop 300   # keep refreshing every 5 minutes
     python manage.py seed_sample_quotes --clear      # delete all sample data
 
+Once a live FX feed runs, use --quotes-only: sample provider quotes are then priced around
+the live mid-market rate, and no sample rates are written (--clear-rates removes old ones).
+
 Everything written is tagged source="sample", so the API reports `sample: true` and the
 site labels it. Real ingestion data is never touched. Remove this once live feeds run.
 """
@@ -20,6 +23,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.fx.models import FxMidRate
+from apps.fx.services import latest_mid_rate
 from apps.reference.models import Corridor, Provider
 from apps.remittance import compare
 from apps.remittance.models import ProviderQuote
@@ -62,14 +66,39 @@ HISTORY_DAYS = 90
 
 class Command(BaseCommand):
     help = "Write labelled sample FX rates and provider quotes for the preview."
+    quotes_only = False
 
     def add_arguments(self, parser):
         parser.add_argument("--clear", action="store_true", help="Delete all sample data.")
         parser.add_argument(
             "--loop", type=int, metavar="SECONDS", help="Keep refreshing every SECONDS."
         )
+        parser.add_argument(
+            "--quotes-only",
+            action="store_true",
+            help="Sample quotes priced on the live mid-market rate; writes no sample rates.",
+        )
+        parser.add_argument(
+            "--clear-rates",
+            action="store_true",
+            help="Delete sample FX rates (and their history) only.",
+        )
 
-    def handle(self, *args, clear: bool, loop: int | None, **options):
+    def handle(
+        self,
+        *args,
+        clear: bool,
+        loop: int | None,
+        quotes_only: bool = False,
+        clear_rates: bool = False,
+        **options,
+    ):
+        if clear_rates:
+            rates, _ = FxMidRate.objects.filter(source=SAMPLE).delete()
+            compare.invalidate(Corridor.objects.values_list("pk", flat=True))
+            self.stdout.write(f"Deleted {rates} sample rates.")
+            return
+        self.quotes_only = quotes_only
         if clear:
             quotes, _ = ProviderQuote.objects.filter(source=SAMPLE).delete()
             rates, _ = FxMidRate.objects.filter(source=SAMPLE).delete()
@@ -86,10 +115,20 @@ class Command(BaseCommand):
         now = timezone.now()
         rng = random.Random()  # noqa: S311 - sample data, not security
         with transaction.atomic():
-            rates = self._write_rates(now, rng)
+            rates = self._live_rates(now) if self.quotes_only else self._write_rates(now, rng)
             quotes = self._write_quotes(now, rates, rng)
         compare.invalidate(Corridor.objects.values_list("pk", flat=True))
-        self.stdout.write(f"{now:%H:%M:%S} wrote {len(rates)} sample rates and {quotes} quotes")
+        written = "live rates used" if self.quotes_only else "sample rates"
+        self.stdout.write(f"{now:%H:%M:%S} {len(rates)} {written}, {quotes} sample quotes")
+
+    def _live_rates(self, now: datetime) -> dict[str, Decimal]:
+        """USD legs from the live feeds (currencies without a fresh rate are left out)."""
+        current = {}
+        for code in USD_TO:
+            rate = latest_mid_rate("USD", code, at=now)
+            if rate is not None:
+                current[code] = rate
+        return current
 
     def _write_rates(self, now: datetime, rng: random.Random) -> dict[str, Decimal]:
         """USD legs only; other pairs are derived through USD, as for real feeds."""
@@ -149,6 +188,8 @@ class Command(BaseCommand):
             margin, flat, pct, minutes = profile
             for corridor in provider.corridors.all():
                 send, receive = corridor.send_currency_id, corridor.receive_currency_id
+                if receive not in usd_to or (send != "USD" and send not in usd_to):
+                    continue  # no live rate for this pair yet
                 usd_send = Decimal(1) if send == "USD" else usd_to[send]
                 mid = usd_to[receive] / usd_send
                 m = max(0.0, margin + rng.uniform(-0.003, 0.003))

@@ -53,6 +53,17 @@ python manage.py seed_sample_quotes --loop 300   # keep it fresh; mid rates expi
 python manage.py seed_sample_quotes --clear      # remove all sample data
 ```
 
+## Live mid-market FX feeds
+
+`apps/fx/feeds.py` has adapters for Open Exchange Rates (USD), ExchangeRate-API (EUR) and
+CurrencyFreaks (GBP). Each is scheduled by Celery beat only when its key is set in `.env`
+(`FX_REFRESH_MINUTES`, default 60). They collect every currency in the reference table,
+including the other African currencies. Run one by hand:
+
+```bash
+python manage.py shell -c "from apps.ingestion.tasks import run_adapter; print(run_adapter('openexchangerates'))"
+```
+
 ## Historical FX rates
 
 Load past mid-market rates (for the trend chart) from a CSV or Excel file:

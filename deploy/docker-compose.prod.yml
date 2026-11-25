@@ -6,6 +6,22 @@
 # ../../frontend-app). Only Caddy is reachable from outside (ports 80/443).
 name: afrimapesa
 
+# Settings shared by every Django container (api, worker, beat, sampler).
+x-django-env: &django-env
+  DJANGO_SETTINGS_MODULE: config.settings.prod
+  DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY in .env.prod}
+  DATABASE_URL: postgres://afrimapesa:${POSTGRES_PASSWORD}@db:5432/afrimapesa
+  REDIS_URL: redis://redis:6379/0
+  LOG_LEVEL: INFO
+  # Live mid-market FX feeds: each runs only when its key is set (see .env.prod.example).
+  OPEN_EXCHANGE_RATES_APP_ID: ${OPEN_EXCHANGE_RATES_APP_ID:-}
+  EXCHANGE_RATE_API_KEY: ${EXCHANGE_RATE_API_KEY:-}
+  EXCHANGE_RATE_API_BASE: ${EXCHANGE_RATE_API_BASE:-EUR}
+  CURRENCY_FREAKS_API_KEY: ${CURRENCY_FREAKS_API_KEY:-}
+  CURRENCY_FREAKS_BASE: ${CURRENCY_FREAKS_BASE:-GBP}
+  FX_REFRESH_MINUTES: ${FX_REFRESH_MINUTES:-60}
+  FX_MID_MAX_AGE_MINUTES: ${FX_MID_MAX_AGE_MINUTES:-30}
+
 services:
   db:
     image: timescale/timescaledb:latest-pg16
@@ -35,21 +51,42 @@ services:
     build: ..
     restart: unless-stopped
     environment:
-      DJANGO_SETTINGS_MODULE: config.settings.prod
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY in .env.prod}
+      <<: *django-env
       # "api" lets the frontend container call Django over the internal network.
       DJANGO_ALLOWED_HOSTS: ${DOMAIN},api,localhost
       DJANGO_CSRF_TRUSTED_ORIGINS: https://${DOMAIN}
-      DATABASE_URL: postgres://afrimapesa:${POSTGRES_PASSWORD}@db:5432/afrimapesa
-      REDIS_URL: redis://redis:6379/0
-      LOG_LEVEL: INFO
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
 
+  # Scheduled ingestion: beat queues the FX feeds every FX_REFRESH_MINUTES, the worker runs
+  # them. Every run is logged in the ingestion_runs table (Django admin > Ingestion runs).
+  worker:
+    build: ..
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - until python manage.py migrate --check >/dev/null 2>&1; do sleep 5; done;
+        exec celery -A config worker -l info --concurrency 2
+    environment: *django-env
+    depends_on:
+      api: { condition: service_started }
+      redis: { condition: service_healthy }
+
+  beat:
+    build: ..
+    restart: unless-stopped
+    command: celery -A config beat -l info --schedule /tmp/celerybeat-schedule
+    environment: *django-env
+    depends_on:
+      - worker
+
   # PREVIEW ONLY: keeps labelled sample rates and quotes fresh (every 5 min) until the live
-  # FX feed and provider adapters run. Remove this service and run
-  # `manage.py seed_sample_quotes --clear` when they do.
+  # FX feed and provider adapters run. Once an FX feed key is set, set
+  # SAMPLER_FLAGS=--quotes-only so only sample provider quotes are written, priced on the
+  # live rates. Remove this service and run `seed_sample_quotes --clear` when the provider
+  # adapters run too.
   sampler:
     build: ..
     restart: unless-stopped
@@ -58,12 +95,8 @@ services:
       - sh
       - -c
       - until python manage.py migrate --check >/dev/null 2>&1; do sleep 5; done;
-        exec python manage.py seed_sample_quotes --loop 300
-    environment:
-      DJANGO_SETTINGS_MODULE: config.settings.prod
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
-      DATABASE_URL: postgres://afrimapesa:${POSTGRES_PASSWORD}@db:5432/afrimapesa
-      REDIS_URL: redis://redis:6379/0
+        exec python manage.py seed_sample_quotes --loop 300 ${SAMPLER_FLAGS:-}
+    environment: *django-env
     depends_on:
       api: { condition: service_started }
 

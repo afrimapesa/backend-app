@@ -6,10 +6,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
 
+from django.conf import settings
+
 from .models import FxMidRate
 
-# FX feeds refresh every 5 minutes; anything older than this is not a usable reference.
-DEFAULT_MAX_AGE = timedelta(minutes=30)
+# How old a mid-market rate may be and still be used as the reference: FX_MID_MAX_AGE
+# (30 minutes by default; raise it when the feed plan only refreshes hourly).
 PIVOT = "USD"
 
 
@@ -21,7 +23,7 @@ class MidRate:
 
 
 def latest_mid(
-    base: str, quote: str, *, at: datetime, max_age: timedelta = DEFAULT_MAX_AGE
+    base: str, quote: str, *, at: datetime, max_age: timedelta | None = None
 ) -> MidRate | None:
     """Mid-market rate for 1 ``base`` in ``quote`` as of ``at``, or None if no fresh rate.
 
@@ -30,6 +32,8 @@ def latest_mid(
     """
     if base == quote:
         return MidRate(Decimal(1), at, sample=False)
+    if max_age is None:
+        max_age = settings.FX_MID_MAX_AGE
     direct = _latest(base, quote, at, max_age)
     if direct is not None:
         return direct
@@ -47,7 +51,7 @@ def latest_mid(
 
 
 def latest_mid_rate(
-    base: str, quote: str, *, at: datetime, max_age: timedelta = DEFAULT_MAX_AGE
+    base: str, quote: str, *, at: datetime, max_age: timedelta | None = None
 ) -> Decimal | None:
     """Just the rate from :func:`latest_mid`."""
     mid = latest_mid(base, quote, at=at, max_age=max_age)

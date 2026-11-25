@@ -126,6 +126,35 @@ Sample articles for the news pages (once, or again to re-date them; removed with
 docker compose -f docker-compose.prod.yml --env-file .env.prod exec api python manage.py seed_sample_articles
 ```
 
+## Switching on live exchange rates
+
+The `worker` and `beat` containers run the mid-market FX feeds on a schedule. A feed runs
+only when its key is in `.env.prod`:
+
+| Feed | Key | Gives |
+|---|---|---|
+| Open Exchange Rates | `OPEN_EXCHANGE_RATES_APP_ID` | USD rates for every currency (enough on its own) |
+| ExchangeRate-API | `EXCHANGE_RATE_API_KEY` | direct EUR rates |
+| CurrencyFreaks | `CURRENCY_FREAKS_API_KEY` | direct GBP rates (non-USD base needs a paid plan) |
+
+1. Add at least one key. On free plans keep `FX_REFRESH_MINUTES=60` and
+   `FX_MID_MAX_AGE_MINUTES=150` (rates are hourly); on a paid plan use 5 and 30.
+2. Set `SAMPLER_FLAGS=--quotes-only` so the preview keeps sample *provider quotes*, priced on
+   the live rates, and stops writing sample rates.
+3. Restart and remove the old sample rates:
+
+```bash
+C="docker compose -f docker-compose.prod.yml --env-file .env.prod"
+$C up -d --build
+$C exec api python manage.py seed_sample_quotes --clear-rates
+```
+
+Check it worked in Django admin, **Ingestion runs** (one row per feed run, with errors), or:
+
+```bash
+$C logs --tail=50 worker
+```
+
 ## Useful commands
 
 ```bash

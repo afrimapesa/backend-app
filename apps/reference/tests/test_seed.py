@@ -80,7 +80,8 @@ def test_corridor_rejects_same_country():
 def test_currency_list_endpoint(client):
     response = client.get(reverse("currency-list"))
     assert response.status_code == 200
-    assert len(response.json()) == Currency.objects.count() == 9
+    # 9 launch currencies + 35 other African currencies (migration 0005)
+    assert len(response.json()) == Currency.objects.count() == 44
 
 
 @pytest.mark.parametrize(("role", "expected"), [("sending", 12), ("receiving", 6), (None, 19)])
