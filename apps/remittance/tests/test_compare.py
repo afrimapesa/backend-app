@@ -154,6 +154,23 @@ class TestCompareEndpoint:
         assert row["transfer_time_minutes"] == 30
         assert row["is_stale"] is False
 
+    def test_all_returns_every_provider(self, client, gb_ng, now):
+        for slug, rate in [
+            ("wise", "2030"),
+            ("remitly", "2000"),
+            ("lemfi", "2035"),
+            ("nala", "2020"),
+            ("sendwave", "2010"),
+            ("xe", "1990"),
+        ]:
+            add_quote(gb_ng, slug, rate, now - timedelta(minutes=1))
+        url = reverse("remittance-compare")
+        params = {"send": "GB", "receive": "NG", "amount": "200"}
+        assert len(client.get(url, params).json()["results"]) == 5
+        rows = client.get(url, {**params, "all": "true"}).json()["results"]
+        assert [r["rank"] for r in rows] == [1, 2, 3, 4, 5, 6]
+        assert rows[-1]["provider"]["slug"] == "xe"
+
     @pytest.mark.parametrize(
         ("params", "status"),
         [

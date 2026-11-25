@@ -73,8 +73,11 @@ def invalidate(corridor_ids: Iterable[int]) -> None:
     cache.delete_many([cache_key(cid) for cid in set(corridor_ids)])
 
 
-def compare(corridor: Corridor, amount: Decimal, *, now: datetime) -> Comparison:
-    """Rank the corridor's latest provider quotes for ``amount`` (top 5)."""
+def compare(
+    corridor: Corridor, amount: Decimal, *, now: datetime, limit: int | None = engine.TOP_N
+) -> Comparison:
+    """Rank the corridor's latest provider quotes for ``amount`` (top 5, or all with
+    ``limit=None``)."""
     snap = snapshot(corridor, now=now)
     results = (
         engine.rank_quotes(
@@ -84,6 +87,7 @@ def compare(corridor: Corridor, amount: Decimal, *, now: datetime) -> Comparison
             now,
             send_minor_units=snap.send_minor_units,
             receive_minor_units=snap.receive_minor_units,
+            limit=limit,
         )
         if snap.mid is not None
         else []  # no fresh reference rate: nothing can be priced honestly

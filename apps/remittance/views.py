@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 from apps.reference.models import Corridor, Country
 
 from .compare import compare
+from .engine import TOP_N
 
 MAX_AMOUNT = Decimal("1000000")
 
@@ -20,6 +21,9 @@ class CompareQuerySerializer(serializers.Serializer):
     receive = serializers.CharField(min_length=2, max_length=2, help_text="Receiving, e.g. NG")
     amount = serializers.DecimalField(
         max_digits=12, decimal_places=2, min_value=Decimal("0.01"), max_value=MAX_AMOUNT
+    )
+    all = serializers.BooleanField(
+        required=False, default=False, help_text="Return every provider, not just the top 5."
     )
 
 
@@ -61,7 +65,8 @@ class CompareResponseSerializer(serializers.Serializer):
 
 
 class CompareView(APIView):
-    """Top 5 providers for a corridor and amount, ranked by what the recipient receives.
+    """Top 5 providers (or all, with ``all=true``) for a corridor and amount, ranked by what
+    the recipient receives.
 
     Neutral by design: results are ordered by amount received (fresh quotes before stale
     ones); no provider is recommended.
@@ -72,6 +77,7 @@ class CompareView(APIView):
             OpenApiParameter("send", str, required=True, description="Sending country, e.g. GB"),
             OpenApiParameter("receive", str, required=True, description="Receiving, e.g. NG"),
             OpenApiParameter("amount", str, required=True, description="Amount to send, e.g. 200"),
+            OpenApiParameter("all", bool, description="Return every provider, not just the top 5"),
         ],
         responses=CompareResponseSerializer,
     )
@@ -90,7 +96,12 @@ class CompareView(APIView):
         )
 
         now = timezone.now()
-        result = compare(corridor, query.validated_data["amount"], now=now)
+        result = compare(
+            corridor,
+            query.validated_data["amount"],
+            now=now,
+            limit=None if query.validated_data["all"] else TOP_N,
+        )
         snap = result.snapshot
         body = CompareResponseSerializer(
             {
